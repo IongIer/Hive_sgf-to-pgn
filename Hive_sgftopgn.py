@@ -8,9 +8,8 @@ def main():
     expansions = {"M": 0, "L": 0, "P": 0}
     with open(f"{filename}.sgf", "r") as file_read:
         lines = file_read.readlines()
-
-    last_line = write_header(lines[:10], filename, expansions)
-    append_moves(lines[10:], filename, expansions, last_line)
+    write_header(lines[:10], filename, expansions)
+    append_moves(lines[10:], filename, expansions)
 
 
 def write_header(sgf_head, filename, expansions):
@@ -70,10 +69,9 @@ def write_header(sgf_head, filename, expansions):
         file_write.write(
             f"{gametype}\n{date}\n{event}\n{site}\n{round}\n{white}\n{black}\n{result}\n\n"
         )
-    return last_line
 
 
-def append_moves(sgf_body, filename, expansions, last_line):
+def append_moves(sgf_body, filename, expansions):
     pattern_player = r".*ropb([A-Za-z0-9 \\\/-]+\.?).*\]$"
     pattern_pass = r".*([Pp]ass).*$"
     pattern_move = r".*[Mm]ove [BW] ([A-Za-z0-9 \\\/-]+\.?).*\]$"
@@ -102,7 +100,7 @@ def append_moves(sgf_body, filename, expansions, last_line):
                 # no need to escape \ in pgn
                 destination = re.sub(r"\\\\", r"\\", turn[-1])
 
-                coordinates = "".join(turn[1:-1])
+                coordinates = "-".join(turn[1:-1])
 
                 # . on bs is used for the first move where it won't reference another piece and for moves on top of the hive
                 if destination == ".":
@@ -110,8 +108,19 @@ def append_moves(sgf_body, filename, expansions, last_line):
                         destination = ""
                     else:
                         # for moves on top of the hive bs uses it's coordinate system instead of referencing another piece as usual
-                        destination = lookup_table[coordinates][-1]
-
+                        try:
+                            destination = lookup_table[coordinates][-1]
+                        except IndexError:
+                            current_x, current_y = reverse_lookup[placed_bug].split("-")
+                            destination_x, destination_y = coordinates.split("-")
+                            print(current_x, current_y, destination_x, destination_y)
+                            destination = handle_unvisited_hex(
+                                current_x,
+                                int(current_y),
+                                destination_x,
+                                int(destination_y),
+                                placed_bug,
+                            )
                 if placed_bug in reverse_lookup:
                     lookup_table[reverse_lookup[placed_bug]].pop()
                 reverse_lookup[placed_bug] = coordinates
@@ -121,7 +130,24 @@ def append_moves(sgf_body, filename, expansions, last_line):
                 destination = ""
             file_write.write(f"{i}. {placed_bug} {destination}\n")
             i += 1
-        file_write.write(f"{last_line[1:-1]}\n")
+
+
+def handle_unvisited_hex(
+    current_x, current_y, destination_x, destination_y, placed_bug
+):
+    if current_y == destination_y:
+        if ord(current_x) > ord(destination_x):
+            return f"-{placed_bug}"
+        else:
+            return f"{placed_bug}-"
+    if current_x == destination_x:
+        if current_y > destination_y:
+            return f"\\{placed_bug}"
+        else:
+            return f"{placed_bug}\\"
+    if current_y > destination_y:
+        return f"{placed_bug}/"
+    return f"/{placed_bug}"
 
 
 if __name__ == "__main__":
