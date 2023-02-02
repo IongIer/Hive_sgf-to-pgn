@@ -27,6 +27,9 @@ def write_header(sgf_head, filename, expansions):
     players = {extracted_white: "1-0", extracted_black: "0-1"}
 
     gametype = sgf_head[4][3:-2]
+    if gametype == "Hive-Ultimate":
+        print("Hive-Ultimate not supported")
+        sys.exit(1)
     exp_pieces = ""
     if res == "draw":
         res = "1/2-1/2"
@@ -79,13 +82,9 @@ def append_moves(sgf_body, filename, expansions):
                 placed_bug = turn[0]
 
                 # strip extra number for l/m/p
-                try:
-                    if placed_bug[1] in expansions:
-                        placed_bug = placed_bug[:-1]
-                except IndexError:
-                    print(f"\n {filename} \n")
 
-                    raise IndexError
+                if placed_bug[1] in expansions:
+                    placed_bug = placed_bug[:-1]
 
                 # no need to escape \ in pgn
                 destination = re.sub(r"\\\\", r"\\", turn[-1])
