@@ -13,46 +13,31 @@ def main():
 
 
 def write_header(sgf_head, filename, expansions):
-    pattern_gametype = r"^SU\[(.*)\]$"
-    pattern_result = r"RE\[(?:Game won by )?(?:The game is a )?(.*)\]$"
-    pattern_white = r"P0\[id \"(.*)\"\]$"
-    pattern_black = r"P1\[id \"(.*)\"\]$"
-    exp_pieces = gametype = white = black = result = ""
-    date = '[Date ""]'
-    event = '[Event ""]'
-    site = '[Site ""]'
-    round = '[Round ""]'
-    players = {}
-    for line in sgf_head:
-        if not gametype:
-            match = re.search(pattern_gametype, line)
-            if match:
-                gametype = match.group(1)
-                continue
-        if not result:
-            match = re.search(pattern_result, line)
-            if match:
-                result = match.group(1)
-                continue
 
-        if not white:
-            match = re.search(pattern_white, line)
-            if match:
-                players[match.group(1)] = "White"
-                white = f'[White "{match.group(1)}"]'
-                continue
-        if not black:
-            match = re.search(pattern_black, line)
-            if match:
-                players[match.group(1)] = "Black"
-                black = f'[Black "{match.group(1)}"]'
-                break
-    if result == "draw":
-        last_line = result.title()
-        result = f"[Result {last_line}]"
+    extracted_date = ".".join(filename.split("-")[-4:-1])
+    extracted_white = sgf_head[8].split(" ")[-1][:-2].strip('"')
+    extracted_black = sgf_head[9].split(" ")[-1][:-2].strip('"')
+    res = sgf_head[7].split(" ")[-1][:-2]
+    date = f'[Date "{extracted_date}"]'
+    event = f'[Event ""]'
+    site = f'[Site "boardspace.net"]'
+    round = f'[Round ""]'
+    white = f'[White "{extracted_white}"]'
+    black = f'[Black "{extracted_black}"]'
+    players = {extracted_white: "1-0", extracted_black: "0-1"}
+
+    gametype = sgf_head[4][3:-2]
+    exp_pieces = ""
+    if res == "draw":
+        res = "1/2-1/2"
     else:
-        last_line = f'"{players[result]}Wins"'
-        result = f"[Result {last_line}]"
+        try:
+            res = f"{players[res]}"
+        except KeyError:
+            res = "error parsing result"
+
+    result = f'[Result "{res}"]'
+
     if len(gametype) == 4:
         gametype = '[GameType "Base"]'
     else:
@@ -94,8 +79,13 @@ def append_moves(sgf_body, filename, expansions):
                 placed_bug = turn[0]
 
                 # strip extra number for l/m/p
-                if placed_bug[1] in expansions:
-                    placed_bug = placed_bug[:-1]
+                try:
+                    if placed_bug[1] in expansions:
+                        placed_bug = placed_bug[:-1]
+                except IndexError:
+                    print(f"\n {filename} \n")
+
+                    raise IndexError
 
                 # no need to escape \ in pgn
                 destination = re.sub(r"\\\\", r"\\", turn[-1])
@@ -113,7 +103,6 @@ def append_moves(sgf_body, filename, expansions):
                         except IndexError:
                             current_x, current_y = reverse_lookup[placed_bug].split("-")
                             destination_x, destination_y = coordinates.split("-")
-                            print(current_x, current_y, destination_x, destination_y)
                             destination = handle_unvisited_hex(
                                 current_x,
                                 int(current_y),
