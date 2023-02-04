@@ -99,6 +99,8 @@ def append_moves(sgf_body, filename, expansions):
                         # for moves on top of the hive bs uses it's coordinate system instead of referencing another piece as usual
                         try:
                             destination = lookup_table[coordinates][-1]
+
+                        # when dropping down the same . is used but the above will fail because there is no piece there    
                         except IndexError:
                             current_x, current_y = reverse_lookup[placed_bug].split("-")
                             destination_x, destination_y = coordinates.split("-")
@@ -134,8 +136,8 @@ def handle_unvisited_hex(
         else:
             return f"{placed_bug}\\"
     if current_y > destination_y:
-        return f"{placed_bug}/"
-    return f"/{placed_bug}"
+        return f"/{placed_bug}"
+    return f"{placed_bug}/"
 
 
 if __name__ == "__main__":
