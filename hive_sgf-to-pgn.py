@@ -40,7 +40,6 @@ def write_header(sgf_head, filename, expansions):
             res = "error parsing result"
 
     result = f'[Result "{res}"]'
-
     if len(gametype) == 4:
         gametype = '[GameType "Base"]'
     else:
@@ -63,21 +62,51 @@ def append_moves(sgf_body, filename, expansions):
     pattern_player = r".*ropb([A-Za-z0-9 \\\/-]+\.?).*\]$"
     pattern_pass = r".*([Pp]ass).*$"
     pattern_move = r".*[Mm]ove [BW] ([A-Za-z0-9 \\\/-]+\.?).*\]$"
+    pattern_done = r"^; P[01]\[\d+ ([dD]one).*$"
+    pattern_end = r"^; P\d\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
+    end = r"(:?[Aa]ccept[dD]raw)|(:?[rR]esign)"
     matches = [
         match.group(1)
         for string in sgf_body
-        for pattern in (pattern_move, pattern_pass, pattern_player)
+        for pattern in (
+            pattern_move,
+            pattern_pass,
+            pattern_player,
+            pattern_done,
+            pattern_end
+        )
         for match in re.finditer(pattern, string)
         if match
     ]
     i = 1
     lookup_table = defaultdict(list)
     reverse_lookup = {}
+    placed_bug = ""
+    destination = ""
+    coordinates= ""
+
 
     with open(f"{filename}.pgn", "a") as file_write:
         for line in matches:
+            if re.match(end, line):
+                return 
+
             line = line.strip()
-            if line != "Pass" and line != "pass":
+            if line == "Done" or line == "done":
+                if not placed_bug:
+                    placed_bug = "pass"
+                    destination = ""
+
+                file_write.write(f"{i}. {placed_bug} {destination}\n")
+                if placed_bug in reverse_lookup:
+                    lookup_table[reverse_lookup[placed_bug]].pop()
+                reverse_lookup[placed_bug] = coordinates
+                lookup_table[coordinates].append(placed_bug)
+                i += 1
+                placed_bug = ""
+                destination = ""
+                coordinates = ""
+            elif line != "Pass" and line != "pass":
                 turn = line.split()
                 placed_bug = turn[0]
 
@@ -100,7 +129,7 @@ def append_moves(sgf_body, filename, expansions):
                         try:
                             destination = lookup_table[coordinates][-1]
 
-                        # when dropping down the same . is used but the above will fail because there is no piece there    
+                        # when dropping down the same . is used but the above will fail because there is no piece there
                         except IndexError:
                             current_x, current_y = reverse_lookup[placed_bug].split("-")
                             destination_x, destination_y = coordinates.split("-")
@@ -111,15 +140,10 @@ def append_moves(sgf_body, filename, expansions):
                                 int(destination_y),
                                 placed_bug,
                             )
-                if placed_bug in reverse_lookup:
-                    lookup_table[reverse_lookup[placed_bug]].pop()
-                reverse_lookup[placed_bug] = coordinates
-                lookup_table[coordinates].append(placed_bug)
+
             else:
                 placed_bug = "pass"
                 destination = ""
-            file_write.write(f"{i}. {placed_bug} {destination}\n")
-            i += 1
 
 
 def handle_unvisited_hex(
@@ -132,9 +156,9 @@ def handle_unvisited_hex(
             return f"{placed_bug}-"
     if current_x == destination_x:
         if current_y > destination_y:
-            return f"\\{placed_bug}"
-        else:
             return f"{placed_bug}\\"
+        else:
+            return f"\\{placed_bug}"
     if current_y > destination_y:
         return f"/{placed_bug}"
     return f"{placed_bug}/"
