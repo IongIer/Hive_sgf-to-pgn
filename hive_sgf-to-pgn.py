@@ -8,16 +8,17 @@ def main():
     expansions = {"M": 0, "L": 0, "P": 0}
     with open(f"{filename}.sgf", "r") as file_read:
         lines = file_read.readlines()
-    write_header(lines[:10], filename, expansions)
+    write_header(lines[:10], filename, expansions, lines[-7])
     append_moves(lines[10:], filename, expansions)
 
 
-def write_header(sgf_head, filename, expansions):
+def write_header(sgf_head, filename, expansions, sgf_tail):
 
+    pattern_end = r"^; (P\d)\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
     extracted_date = ".".join(filename.split("-")[-4:-1])
     extracted_white = sgf_head[8].split(" ")[-1][:-2].strip('"')
     extracted_black = sgf_head[9].split(" ")[-1][:-2].strip('"')
-    res = sgf_head[7].split(" ")[-1][:-2]
+    res = ""
     date = f'[Date "{extracted_date}"]'
     event = f'[Event ""]'
     site = f'[Site "boardspace.net"]'
@@ -25,21 +26,36 @@ def write_header(sgf_head, filename, expansions):
     white = f'[White "{extracted_white}"]'
     black = f'[Black "{extracted_black}"]'
     players = {extracted_white: "1-0", extracted_black: "0-1"}
+    match = re.match(pattern_end, sgf_tail)
+    if match:
+        player = match.group(1)
+        outcome = match.group(2)
+        if outcome != "resign" and outcome != "Resign":
+            res = "1/2-1/2"
+        else:
+            if player == "P0":
+                res = "0-1"
+            else:
+                res = "1-0"
+
+    if not res:
+        res = sgf_head[7].split(" ")[-1][:-2]
+        if res == "draw":
+            res = "1/2-1/2"
+        else:
+            try:
+                res = f"{players[res]}"
+            except KeyError:
+                res = "error parsing result"
+
+    result = f'[Result "{res}"]'
 
     gametype = sgf_head[4][3:-2]
     if gametype == "Hive-Ultimate":
         print("Hive-Ultimate not supported")
         sys.exit(1)
     exp_pieces = ""
-    if res == "draw":
-        res = "1/2-1/2"
-    else:
-        try:
-            res = f"{players[res]}"
-        except KeyError:
-            res = "error parsing result"
 
-    result = f'[Result "{res}"]'
     if len(gametype) == 4:
         gametype = '[GameType "Base"]'
     else:
@@ -73,7 +89,7 @@ def append_moves(sgf_body, filename, expansions):
             pattern_pass,
             pattern_player,
             pattern_done,
-            pattern_end
+            pattern_end,
         )
         for match in re.finditer(pattern, string)
         if match
@@ -83,13 +99,12 @@ def append_moves(sgf_body, filename, expansions):
     reverse_lookup = {}
     placed_bug = ""
     destination = ""
-    coordinates= ""
-
+    coordinates = ""
 
     with open(f"{filename}.pgn", "a") as file_write:
         for line in matches:
             if re.match(end, line):
-                return 
+                return
 
             line = line.strip()
             if line == "Done" or line == "done":
