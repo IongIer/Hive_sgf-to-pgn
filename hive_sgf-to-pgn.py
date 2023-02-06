@@ -80,6 +80,7 @@ def append_moves(sgf_body, filename, expansions):
     pattern_move = r".*[Mm]ove [BW] ([A-Za-z0-9 \\\/-]+\.?).*\]$"
     pattern_done = r"^; P[01]\[\d+ ([dD]one).*$"
     pattern_end = r"^; P\d\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
+    pattern_draw = r"^; P\d\[\d+ (?:[Dd]ecline)?(?:[Oo]ffer)?([Dd]raw)+.*$"
     end = r"(:?[Aa]ccept[dD]raw)|(:?[rR]esign)"
     matches = [
         match.group(1)
@@ -88,6 +89,7 @@ def append_moves(sgf_body, filename, expansions):
             pattern_move,
             pattern_pass,
             pattern_player,
+            pattern_draw,
             pattern_done,
             pattern_end,
         )
@@ -100,6 +102,7 @@ def append_moves(sgf_body, filename, expansions):
     placed_bug = ""
     destination = ""
     coordinates = ""
+    draw = False
 
     with open(f"{filename}.pgn", "a") as file_write:
         for line in matches:
@@ -107,7 +110,14 @@ def append_moves(sgf_body, filename, expansions):
                 return
 
             line = line.strip()
+            if line == "draw" or line == "Draw":
+                draw = True
+                continue
+
             if line == "Done" or line == "done":
+                if draw:
+                    draw = False
+                    continue
                 if not placed_bug:
                     placed_bug = "pass"
                     destination = ""
