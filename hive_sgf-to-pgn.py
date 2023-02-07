@@ -14,7 +14,11 @@ def main():
 
 def write_header(sgf_head, filename, expansions, sgf_tail):
 
+    # regex that will handle result in games where resign or accept draw took place, this helps because it's more reliable than the result line in the sgf in some cases
     pattern_end = r"^; (P\d)\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
+
+    # the first part of the sgf is predictible so string slices are used to extract the info instead of regex
+
     extracted_date = ".".join(filename.split("-")[-4:-1])
     extracted_white = sgf_head[8].split(" ")[-1][:-2].strip('"')
     extracted_black = sgf_head[9].split(" ")[-1][:-2].strip('"')
@@ -26,11 +30,13 @@ def write_header(sgf_head, filename, expansions, sgf_tail):
     white = f'[White "{extracted_white}"]'
     black = f'[Black "{extracted_black}"]'
     players = {extracted_white: "1-0", extracted_black: "0-1"}
+
+    # try to see if the game finished by agreement
     match = re.match(pattern_end, sgf_tail)
     if match:
         player = match.group(1)
         outcome = match.group(2)
-        if outcome != "resign" and outcome != "Resign":
+        if outcome.lower() != "resign":
             res = "1/2-1/2"
         else:
             if player == "P0":
@@ -38,6 +44,7 @@ def write_header(sgf_head, filename, expansions, sgf_tail):
             else:
                 res = "1-0"
 
+    # extract result from result line
     if not res:
         res = sgf_head[7].split(" ")[-1][:-2]
         if res == "draw":
@@ -45,6 +52,8 @@ def write_header(sgf_head, filename, expansions, sgf_tail):
         else:
             try:
                 res = f"{players[res]}"
+
+            # this will sometimes happen due to how boardspace saves results for guest games and games where the player who won was using a localized language version
             except KeyError:
                 res = "error parsing result"
 
@@ -81,7 +90,8 @@ def append_moves(sgf_body, filename, expansions):
     pattern_done = r"^; P[01]\[\d+ ([dD]one).*$"
     pattern_end = r"^; P\d\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
     pattern_draw = r"^; P\d\[\d+ (?:[Dd]ecline)?(?:[Oo]ffer)?([Dd]raw)+.*$"
-    end = r"(:?[Aa]ccept[dD]raw)|(:?[rR]esign)"
+
+    # list comp that will iterate over all lines and extract match group 1 from either of the above patterns
     matches = [
         match.group(1)
         for string in sgf_body
@@ -96,6 +106,7 @@ def append_moves(sgf_body, filename, expansions):
         for match in re.finditer(pattern, string)
         if match
     ]
+    end = r"(:?[Aa]ccept[dD]raw)|(:?[rR]esign)"
     i = 1
     lookup_table = defaultdict(list)
     reverse_lookup = {}
@@ -106,15 +117,20 @@ def append_moves(sgf_body, filename, expansions):
 
     with open(f"{filename}.pgn", "a") as file_write:
         for line in matches:
+            # stop writing in case a resign or accept draw is encountered
             if re.match(end, line):
                 return
 
             line = line.strip()
-            if line == "draw" or line == "Draw":
+            low = line.lower()
+
+            # for draw offers and refusals, the next done needs to be skipped
+            if low == "draw":
                 draw = True
                 continue
 
-            if line == "Done" or line == "done":
+            # write the next line to a file when a done is encountered but only if it wasn't part of a draw offer or refusal
+            if low == "done":
                 if draw:
                     draw = False
                     continue
@@ -131,7 +147,9 @@ def append_moves(sgf_body, filename, expansions):
                 placed_bug = ""
                 destination = ""
                 coordinates = ""
-            elif line != "Pass" and line != "pass":
+
+            # update the current move to be written
+            elif low != "pass":
                 turn = line.split()
                 placed_bug = turn[0]
 
@@ -158,22 +176,21 @@ def append_moves(sgf_body, filename, expansions):
                         except IndexError:
                             current_x, current_y = reverse_lookup[placed_bug].split("-")
                             destination_x, destination_y = coordinates.split("-")
-                            destination = handle_unvisited_hex(
+                            destination = drop_down_bug(
                                 current_x,
                                 int(current_y),
                                 destination_x,
                                 int(destination_y),
                                 placed_bug,
                             )
-
+            # in case a player can't move
             else:
                 placed_bug = "pass"
                 destination = ""
 
 
-def handle_unvisited_hex(
-    current_x, current_y, destination_x, destination_y, placed_bug
-):
+# six different cases depending on current coordinates and destination coordinates
+def drop_down_bug(current_x, current_y, destination_x, destination_y, placed_bug):
     if current_y == destination_y:
         if ord(current_x) > ord(destination_x):
             return f"-{placed_bug}"
