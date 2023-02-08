@@ -84,28 +84,7 @@ def write_header(sgf_head, filename, expansions, sgf_tail):
 
 
 def append_moves(sgf_body, filename, expansions):
-    pattern_player = r".*ropb([A-Za-z0-9 \\\/-]+\.?).*\]$"
-    pattern_pass = r".*([Pp]ass).*$"
-    pattern_move = r".*[Mm]ove [BW] ([A-Za-z0-9 \\\/-]+\.?).*\]$"
-    pattern_done = r"^; P[01]\[\d+ ([dD]one).*$"
-    pattern_end = r"^; P\d\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
-    pattern_draw = r"^; P\d\[\d+ (?:[Dd]ecline)?(?:[Oo]ffer)?([Dd]raw)+.*$"
 
-    # list comp that will iterate over all lines and extract match group 1 from either of the above patterns
-    matches = [
-        match.group(1)
-        for string in sgf_body
-        for pattern in (
-            pattern_move,
-            pattern_pass,
-            pattern_player,
-            pattern_draw,
-            pattern_done,
-            pattern_end,
-        )
-        for match in re.finditer(pattern, string)
-        if match
-    ]
     end = r"(:?[Aa]ccept[dD]raw)|(:?[rR]esign)"
     i = 1
     lookup_table = defaultdict(list)
@@ -116,19 +95,19 @@ def append_moves(sgf_body, filename, expansions):
     draw = False
 
     with open(f"{filename}.pgn", "a") as file_write:
-        for line in matches:
+        for unprocessed_line in sgf_body:
+            line = match_line(unprocessed_line)
+            if not line:
+                continue
             # stop writing in case a resign or accept draw is encountered
             if re.match(end, line):
                 return
-
             line = line.strip()
             low = line.lower()
-
             # for draw offers and refusals, the next done needs to be skipped
             if low == "draw":
                 draw = True
                 continue
-
             # write the next line to a file when a done is encountered but only if it wasn't part of a draw offer or refusal
             if low == "done":
                 if draw:
@@ -137,7 +116,6 @@ def append_moves(sgf_body, filename, expansions):
                 if not placed_bug:
                     placed_bug = "pass"
                     destination = ""
-
                 file_write.write(f"{i}. {placed_bug} {destination}\n")
                 if placed_bug in reverse_lookup:
                     lookup_table[reverse_lookup[placed_bug]].pop()
@@ -147,22 +125,16 @@ def append_moves(sgf_body, filename, expansions):
                 placed_bug = ""
                 destination = ""
                 coordinates = ""
-
             # update the current move to be written
             elif low != "pass":
                 turn = line.split()
                 placed_bug = turn[0]
-
                 # strip extra number for l/m/p
-
                 if placed_bug[1] in expansions:
                     placed_bug = placed_bug[:-1]
-
                 # no need to escape \ in pgn
                 destination = re.sub(r"\\\\", r"\\", turn[-1])
-
                 coordinates = "-".join(turn[1:-1])
-
                 # . on bs is used for the first move where it won't reference another piece and for moves on top of the hive
                 if destination == ".":
                     if i == 1:
@@ -171,7 +143,6 @@ def append_moves(sgf_body, filename, expansions):
                         # for moves on top of the hive bs uses it's coordinate system instead of referencing another piece as usual
                         try:
                             destination = lookup_table[coordinates][-1]
-
                         # when dropping down the same . is used but the above will fail because there is no piece there
                         except IndexError:
                             current_x, current_y = reverse_lookup[placed_bug].split("-")
@@ -187,6 +158,22 @@ def append_moves(sgf_body, filename, expansions):
             else:
                 placed_bug = "pass"
                 destination = ""
+
+
+def match_line(line):
+    patterns = [
+        r".*ropb([A-Za-z0-9 \\\/-]+\.?).*\]$",
+        r".*([Pp]ass).*$",
+        r".*[Mm]ove [BW] ([A-Za-z0-9 \\\/-]+\.?).*\]$",
+        r"^; P[01]\[\d+ ([dD]one).*$",
+        r"^; P\d\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$",
+        r"^; P\d\[\d+ (?:[Dd]ecline)?(?:[Oo]ffer)?([Dd]raw)+.*$",
+    ]
+    for pattern in patterns:
+        match = re.match(pattern, line)
+        if match:
+            return match.group(1)
+    return ""
 
 
 # six different cases depending on current coordinates and destination coordinates
