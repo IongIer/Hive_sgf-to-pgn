@@ -29,7 +29,7 @@ def dir_path(path):
 def make_pgn(pair):
     filename, sgf_path = pair
     expansions = {"M": 0, "L": 0, "P": 0}
-    with open(f"{sgf_path}//{filename}.sgf", "r") as file_read:
+    with open(os.path.join(sgf_path, f"{filename}.sgf"), "r") as file_read:
         lines = file_read.readlines()
     write_header(lines, filename, expansions, lines[-7], sgf_path)
 
