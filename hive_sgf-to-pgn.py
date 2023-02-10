@@ -1,27 +1,42 @@
 import re
 import os
 import glob
+import argparse
 from collections import defaultdict
 from multiprocessing import Pool
 
 def main():
-    dir_path = "./pgn/"
-    os.makedirs(dir_path, exist_ok=True)
-    filenames = [(filename[:-4], dir_path) for filename in glob.glob("./*.sgf")]
+    parsed_args = parse_arguments()
+    sgf_folder = os.path.normpath(vars(parsed_args)['path'])
+    pgn_path = os.path.normpath(f"{sgf_folder}//pgn//")
+    os.makedirs(pgn_path, exist_ok=True)
+    filenames = [(os.path.basename(filename)[:-4], sgf_folder) for filename in glob.glob(f"{sgf_folder}//*.sgf")]
     with Pool() as p:
         p.map(make_pgn, filenames)
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Command line tool to convert boardspace hive sgf files to pgn')
+    parser.add_argument('-path', type=dir_path, required=True)
+    
+    return parser.parse_args()
+
+def dir_path(path):
+    if os.path.isdir(path):
+        return path
+    else:
+        raise argparse.ArgumentTypeError(f"{path} is not a valid directory")
 
 def make_pgn(pair):
-    filename, dir_path = pair
+    filename, sgf_path = pair
     expansions = {"M": 0, "L": 0, "P": 0}
-    with open(f"{filename}.sgf", "r") as file_read:
+    with open(f"{sgf_path}//{filename}.sgf", "r") as file_read:
         lines = file_read.readlines()
-    write_header(lines, filename, expansions, lines[-7], dir_path)
+    write_header(lines, filename, expansions, lines[-7], sgf_path)
 
 
-def write_header(lines, filename, expansions, sgf_tail, dir_path):
+def write_header(lines, filename, expansions, sgf_tail, sgf_path):
     sgf_head, sgf_body = lines[:10], lines[10:]
+    pgn_path = os.path.normpath(f"{sgf_path}//pgn//")
 
     # regex that will handle result in games where resign or accept draw took place, this helps because it's more reliable than the result line in the sgf in some cases
     pattern_end = r"^; (P\d)\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
@@ -70,7 +85,6 @@ def write_header(lines, filename, expansions, sgf_tail, dir_path):
 
     gametype = sgf_head[4][3:-2]
     if gametype == "Hive-Ultimate":
-        print("Hive-Ultimate not supported")
         return
     exp_pieces = ""
 
@@ -86,15 +100,15 @@ def write_header(lines, filename, expansions, sgf_tail, dir_path):
                 exp_pieces += k
         gametype = f'[GameType "Base+{exp_pieces}"]'
 
-    with open(os.path.join(dir_path, f"{filename}.pgn"), "w") as file_write:
+    with open(os.path.join(pgn_path, f"{filename}.pgn"), "w") as file_write:
         file_write.write(
             f"{gametype}\n{date}\n{event}\n{site}\n{round}\n{white}\n{black}\n{result}\n\n"
         )
 
-    append_moves(sgf_body, filename, expansions, dir_path)
+    append_moves(sgf_body, filename, expansions, pgn_path)
 
 
-def append_moves(sgf_body, filename, expansions, dir_path):
+def append_moves(sgf_body, filename, expansions, pgn_path):
 
     end = r"(:?[Aa]ccept[dD]raw)|(:?[rR]esign)"
     i = 1
@@ -105,7 +119,7 @@ def append_moves(sgf_body, filename, expansions, dir_path):
     coordinates = ""
     draw = False
 
-    with open(os.path.join(dir_path, f"{filename}.pgn"), "a") as file_write:
+    with open(os.path.join(pgn_path, f"{filename}.pgn"), "a") as file_write:
         for unprocessed_line in sgf_body:
             line = match_line(unprocessed_line)
             if not line:
