@@ -2,25 +2,26 @@ import re
 import os
 import glob
 from collections import defaultdict
-
+from multiprocessing import Pool
 
 def main():
-    filenames = [filename[:-4] for filename in glob.glob("./*.sgf")]
     dir_path = "./pgn/"
     os.makedirs(dir_path, exist_ok=True)
-    for filename in filenames:
-        make_pgn(filename, dir_path)
+    filenames = [(filename[:-4], dir_path) for filename in glob.glob("./*.sgf")]
+    with Pool() as p:
+        p.map(make_pgn, filenames)
 
 
-def make_pgn(filename, dir_path):
+def make_pgn(pair):
+    filename, dir_path = pair
     expansions = {"M": 0, "L": 0, "P": 0}
     with open(f"{filename}.sgf", "r") as file_read:
         lines = file_read.readlines()
-    write_header(lines[:10], filename, expansions, lines[-7], dir_path)
-    append_moves(lines[10:], filename, expansions, dir_path)
+    write_header(lines, filename, expansions, lines[-7], dir_path)
 
 
-def write_header(sgf_head, filename, expansions, sgf_tail, dir_path):
+def write_header(lines, filename, expansions, sgf_tail, dir_path):
+    sgf_head, sgf_body = lines[:10], lines[10:]
 
     # regex that will handle result in games where resign or accept draw took place, this helps because it's more reliable than the result line in the sgf in some cases
     pattern_end = r"^; (P\d)\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
@@ -70,7 +71,7 @@ def write_header(sgf_head, filename, expansions, sgf_tail, dir_path):
     gametype = sgf_head[4][3:-2]
     if gametype == "Hive-Ultimate":
         print("Hive-Ultimate not supported")
-        sys.exit(1)
+        return
     exp_pieces = ""
 
     if len(gametype) == 4:
@@ -89,6 +90,8 @@ def write_header(sgf_head, filename, expansions, sgf_tail, dir_path):
         file_write.write(
             f"{gametype}\n{date}\n{event}\n{site}\n{round}\n{white}\n{black}\n{result}\n\n"
         )
+
+    append_moves(sgf_body, filename, expansions, dir_path)
 
 
 def append_moves(sgf_body, filename, expansions, dir_path):
