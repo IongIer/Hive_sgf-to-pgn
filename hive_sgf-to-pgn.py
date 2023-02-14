@@ -39,7 +39,9 @@ def dir_path(path):
 
 def make_pgn(filename, sgf_path):
     expansions = {"M": 0, "L": 0, "P": 0}
-    with open(os.path.join(sgf_path, f"{filename}.sgf"), "r", encoding='utf-8') as file_read:
+    with open(
+        os.path.join(sgf_path, f"{filename}.sgf"), "r", encoding="utf-8"
+    ) as file_read:
         lines = file_read.readlines()
     write_header(lines, filename, expansions, lines[-7], sgf_path)
 
@@ -110,7 +112,7 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
                 exp_pieces += k
         gametype = f'[GameType "Base+{exp_pieces}"]'
 
-    with open(os.path.join(pgn_path, f"{filename}.pgn"), "w") as file_write:
+    with open(os.path.join(pgn_path, f"{filename}.pgn"), "w", encoding="utf-8") as file_write:
         file_write.write(
             f"{gametype}\n{date}\n{event}\n{site}\n{round}\n{white}\n{black}\n{result}\n\n"
         )
@@ -129,7 +131,7 @@ def append_moves(sgf_body, filename, expansions, pgn_path):
     coordinates = ""
     draw = False
 
-    with open(os.path.join(pgn_path, f"{filename}.pgn"), "a") as file_write:
+    with open(os.path.join(pgn_path, f"{filename}.pgn"), "a", encoding="utf-8") as file_write:
         for unprocessed_line in sgf_body:
             line = match_line(unprocessed_line)
             if not line:
@@ -148,47 +150,21 @@ def append_moves(sgf_body, filename, expansions, pgn_path):
                 if draw:
                     draw = False
                     continue
-                if not placed_bug:
-                    placed_bug = "pass"
-                    destination = ""
-                file_write.write(f"{i}. {placed_bug} {destination}\n")
-                if placed_bug in reverse_lookup:
-                    lookup_table[reverse_lookup[placed_bug]].pop()
-                reverse_lookup[placed_bug] = coordinates
-                lookup_table[coordinates].append(placed_bug)
-                i += 1
-                placed_bug = ""
-                destination = ""
-                coordinates = ""
+                i, placed_bug, destination, coordinates = append_current_move(
+                    i,
+                    placed_bug,
+                    destination,
+                    coordinates,
+                    file_write,
+                    lookup_table,
+                    reverse_lookup,
+                )
+
             # update the current move to be written
             elif low != "pass":
-                turn = line.split()
-                placed_bug = turn[0]
-                # strip extra number for l/m/p
-                if placed_bug[1] in expansions:
-                    placed_bug = placed_bug[:-1]
-                # no need to escape \ in pgn
-                destination = re.sub(r"\\\\", r"\\", turn[-1])
-                coordinates = "-".join(turn[1:-1])
-                # . on bs is used for the first move where it won't reference another piece and for moves on top of the hive
-                if destination == ".":
-                    if i == 1:
-                        destination = ""
-                    else:
-                        # for moves on top of the hive bs uses it's coordinate system instead of referencing another piece as usual
-                        try:
-                            destination = lookup_table[coordinates][-1]
-                        # when dropping down the same . is used but the above will fail because there is no piece there
-                        except IndexError:
-                            current_x, current_y = reverse_lookup[placed_bug].split("-")
-                            destination_x, destination_y = coordinates.split("-")
-                            destination = drop_down_bug(
-                                current_x,
-                                int(current_y),
-                                destination_x,
-                                int(destination_y),
-                                placed_bug,
-                            )
+                placed_bug, coordinates, destination = extract_piece_and_destination(
+                    i, line, expansions, lookup_table, reverse_lookup
+                )
             # in case a player can't move
             else:
                 placed_bug = "pass"
@@ -226,6 +202,54 @@ def drop_down_bug(current_x, current_y, destination_x, destination_y, placed_bug
     if current_y > destination_y:
         return f"/{placed_bug}"
     return f"{placed_bug}/"
+
+
+def append_current_move(
+    i, placed_bug, destination, coordinates, file_write, lookup_table, reverse_lookup
+):
+    if not placed_bug:
+        placed_bug = "pass"
+        destination = ""
+    file_write.write(f"{i}. {placed_bug} {destination}\n")
+    if placed_bug in reverse_lookup:
+        lookup_table[reverse_lookup[placed_bug]].pop()
+    if placed_bug != "pass":
+        reverse_lookup[placed_bug] = coordinates
+        lookup_table[coordinates].append(placed_bug)
+    i += 1
+    placed_bug = destination = coordinates = ""
+    return i, placed_bug, destination, coordinates
+
+
+def extract_piece_and_destination(i, line, expansions, lookup_table, reverse_lookup):
+    turn = line.split()
+    placed_bug = turn[0]
+    # strip extra number for l/m/p
+    if len(placed_bug) != 1 and placed_bug[1] in expansions:
+        placed_bug = placed_bug[:-1]
+    # no need to escape \ in pgn
+    destination = re.sub(r"\\\\", r"\\", turn[-1])
+    coordinates = "-".join(turn[1:-1])
+    # . on bs is used for the first move where it won't reference another piece and for moves on top of the hive
+    if destination == ".":
+        if i == 1:
+            destination = ""
+        else:
+            # for moves on top of the hive bs uses it's coordinate system instead of referencing another piece as usual
+            try:
+                destination = lookup_table[coordinates][-1]
+            # when dropping down the same . is used but the above will fail because there is no piece there
+            except IndexError:
+                current_x, current_y = reverse_lookup[placed_bug].split("-")
+                destination_x, destination_y = coordinates.split("-")
+                destination = drop_down_bug(
+                    current_x,
+                    int(current_y),
+                    destination_x,
+                    int(destination_y),
+                    placed_bug,
+                )
+    return placed_bug, coordinates, destination
 
 
 if __name__ == "__main__":
