@@ -2,23 +2,33 @@ import re
 import os
 import glob
 import argparse
+from functools import partial
 from collections import defaultdict
 from multiprocessing import Pool
 
+
 def main():
     parsed_args = parse_arguments()
-    sgf_folder = os.path.normpath(vars(parsed_args)['path'])
+    sgf_folder = os.path.normpath(vars(parsed_args)["path"])
     pgn_path = os.path.normpath(f"{sgf_folder}//pgn//")
     os.makedirs(pgn_path, exist_ok=True)
-    filenames = [(os.path.basename(filename)[:-4], sgf_folder) for filename in glob.glob(f"{sgf_folder}//*.sgf")]
+    make_pgn_at = partial(make_pgn, sgf_path=sgf_folder)
+    filenames = [
+        os.path.basename(filename)[:-4]
+        for filename in glob.glob(f"{sgf_folder}//*.sgf")
+    ]
     with Pool() as p:
-        p.map(make_pgn, filenames)
+        p.map(make_pgn_at, filenames)
+
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='Command line tool to convert boardspace hive sgf files to pgn')
-    parser.add_argument('-path', type=dir_path, required=True)
-    
+    parser = argparse.ArgumentParser(
+        description="Command line tool to convert boardspace hive sgf files to pgn"
+    )
+    parser.add_argument("-path", type=dir_path, required=True)
+
     return parser.parse_args()
+
 
 def dir_path(path):
     if os.path.isdir(path):
@@ -26,10 +36,10 @@ def dir_path(path):
     else:
         raise argparse.ArgumentTypeError(f"{path} is not a valid directory")
 
-def make_pgn(pair):
-    filename, sgf_path = pair
+
+def make_pgn(filename, sgf_path):
     expansions = {"M": 0, "L": 0, "P": 0}
-    with open(os.path.join(sgf_path, f"{filename}.sgf"), "r") as file_read:
+    with open(os.path.join(sgf_path, f"{filename}.sgf"), "r", encoding='utf-8') as file_read:
         lines = file_read.readlines()
     write_header(lines, filename, expansions, lines[-7], sgf_path)
 
