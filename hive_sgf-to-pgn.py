@@ -112,7 +112,9 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
                 exp_pieces += k
         gametype = f'[GameType "Base+{exp_pieces}"]'
 
-    with open(os.path.join(pgn_path, f"{filename}.pgn"), "w", encoding="utf-8") as file_write:
+    with open(
+        os.path.join(pgn_path, f"{filename}.pgn"), "w", encoding="utf-8"
+    ) as file_write:
         file_write.write(
             f"{gametype}\n{date}\n{event}\n{site}\n{round}\n{white}\n{black}\n{result}\n\n"
         )
@@ -131,7 +133,9 @@ def append_moves(sgf_body, filename, expansions, pgn_path):
     coordinates = ""
     draw = False
 
-    with open(os.path.join(pgn_path, f"{filename}.pgn"), "a", encoding="utf-8") as file_write:
+    with open(
+        os.path.join(pgn_path, f"{filename}.pgn"), "a", encoding="utf-8"
+    ) as file_write:
         for unprocessed_line in sgf_body:
             line = match_line(unprocessed_line)
             if not line:
@@ -187,23 +191,6 @@ def match_line(line):
     return ""
 
 
-# six different cases depending on current coordinates and destination coordinates
-def drop_down_bug(current_x, current_y, destination_x, destination_y, placed_bug):
-    if current_y == destination_y:
-        if ord(current_x) > ord(destination_x):
-            return f"-{placed_bug}"
-        else:
-            return f"{placed_bug}-"
-    if current_x == destination_x:
-        if current_y > destination_y:
-            return f"{placed_bug}\\"
-        else:
-            return f"\\{placed_bug}"
-    if current_y > destination_y:
-        return f"/{placed_bug}"
-    return f"{placed_bug}/"
-
-
 def append_current_move(
     i, placed_bug, destination, coordinates, file_write, lookup_table, reverse_lookup
 ):
@@ -250,6 +237,23 @@ def extract_piece_and_destination(i, line, expansions, lookup_table, reverse_loo
                     placed_bug,
                 )
     return placed_bug, coordinates, destination
+
+
+# six different cases depending on current coordinates and destination coordinates
+def drop_down_bug(current_x, current_y, destination_x, destination_y, placed_bug):
+    if current_y == destination_y:
+        if ord(current_x) > ord(destination_x):
+            return f"-{placed_bug}"
+        else:
+            return f"{placed_bug}-"
+    if current_x == destination_x:
+        if current_y > destination_y:
+            return f"{placed_bug}\\"
+        else:
+            return f"\\{placed_bug}"
+    if current_y > destination_y:
+        return f"/{placed_bug}"
+    return f"{placed_bug}/"
 
 
 if __name__ == "__main__":
