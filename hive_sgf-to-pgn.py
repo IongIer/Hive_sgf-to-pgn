@@ -108,7 +108,8 @@ def extract_gametype(line, expansions):
         gametype = '[GameType "Base"]'
     else:
         for char in gametype[-3:]:
-            if char.upper() in expansions:
+            char = char.upper()
+            if char in expansions:
                 expansions[char] += 1
 
         for k, v in expansions.items():
