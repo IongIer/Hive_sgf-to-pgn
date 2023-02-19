@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import re
 import os
 import glob
@@ -62,6 +63,10 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
     while not re.match(pattern_start, current):
         if current.startswith("SU["):
             gametype = extract_gametype(current, expansions)
+            if gametype.lower() == "hive-ultimate":
+                print("Hive-Ultimate unsupported, skipping file")
+                return
+
         elif current.startswith("RE["):
             if not res:
                 res = current 
@@ -96,14 +101,14 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
 def extract_gametype(line, expansions):
     gametype = line[3:-2]
     if gametype == "Hive-Ultimate":
-        raise ValueError("Hive-Ultimate unsuported")
+        return gametype 
     exp_pieces = ""
 
     if len(gametype) == 4:
         gametype = '[GameType "Base"]'
     else:
         for char in gametype[-3:]:
-            if char in expansions:
+            if char.upper() in expansions:
                 expansions[char] += 1
 
         for k, v in expansions.items():
