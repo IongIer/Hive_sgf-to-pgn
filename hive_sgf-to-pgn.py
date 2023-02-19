@@ -123,11 +123,11 @@ def resigned_or_drawn(sgf_tail):
     # regex that will handle result in games where resign or accept draw took place, this helps because it's more reliable than the result line in the sgf in some cases
     pattern_end = r"^; (P\d)\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
 
-    match = re.match(pattern_end, sgf_tail)
+    match_end = re.match(pattern_end, sgf_tail)
     res = ""
-    if match:
-        player = match.group(1)
-        outcome = match.group(2)
+    if match_end:
+        player = match_end.group(1)
+        outcome = match_end.group(2)
         if outcome.lower() != "resign":
             res = "1/2-1/2"
         else:
@@ -220,9 +220,9 @@ def match_line(line):
         r"^; P\d\[\d+ (?:[Dd]ecline)?(?:[Oo]ffer)?([Dd]raw)+.*$",
     ]
     for pattern in patterns:
-        match = re.match(pattern, line)
-        if match:
-            return match.group(1)
+        match_pattern = re.match(pattern, line)
+        if match_pattern:
+            return match_pattern.group(1)
     return ""
 
 
