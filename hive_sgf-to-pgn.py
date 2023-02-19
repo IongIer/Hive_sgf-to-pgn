@@ -2,6 +2,7 @@ import re
 import os
 import glob
 import argparse
+from collections import deque
 from functools import partial
 from collections import defaultdict
 from multiprocessing import Pool
@@ -42,62 +43,60 @@ def make_pgn(filename, sgf_path):
     with open(
         os.path.join(sgf_path, f"{filename}.sgf"), "r", encoding="utf-8"
     ) as file_read:
-        lines = file_read.readlines()
+        lines = deque(file_read.readlines())
     write_header(lines, filename, expansions, lines[-7], sgf_path)
 
 
 def write_header(lines, filename, expansions, sgf_tail, sgf_path):
-    sgf_head, sgf_body = lines[:10], lines[10:]
+
     pgn_path = os.path.normpath(f"{sgf_path}//pgn//")
-
-    # regex that will handle result in games where resign or accept draw took place, this helps because it's more reliable than the result line in the sgf in some cases
-    pattern_end = r"^; (P\d)\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
-
-    # the first part of the sgf is predictible so string slices are used to extract the info instead of regex
-
+    players = dict()
+    pattern_start = r";\s*P0\[0 Start P0\]"
     extracted_date = ".".join(filename.split("-")[-4:-1])
-    extracted_white = sgf_head[8].split(" ")[-1][:-2].strip('"')
-    extracted_black = sgf_head[9].split(" ")[-1][:-2].strip('"')
-    res = ""
+    gametype = ""
+    extracted_white = ""
+    extracted_black = ""
+    res = resigned_or_drawn(sgf_tail)
+    current = lines.popleft()
+
+    while not re.match(pattern_start, current):
+        if current.startswith("SU["):
+            gametype = extract_gametype(current, expansions)
+        elif current.startswith("RE["):
+            if not res:
+                res = current 
+        elif current.startswith("P0[id"):
+            extracted_white = extract_player(current)
+            players[extracted_white] = "1-0"
+        elif current.startswith("P1[id"):
+            extracted_black = extract_player(current)
+            players[extracted_black] = "0-1"
+        current = lines.popleft()
+
+    res = extract_result(res, players)
+    sgf_body = lines
     date = f'[Date "{extracted_date}"]'
     event = f'[Event ""]'
     site = f'[Site "boardspace.net"]'
-    round = f'[Round ""]'
+    game_round = f'[Round ""]'
     white = f'[White "{extracted_white}"]'
     black = f'[Black "{extracted_black}"]'
-    players = {extracted_white: "1-0", extracted_black: "0-1"}
-
-    # try to see if the game finished by agreement
-    match = re.match(pattern_end, sgf_tail)
-    if match:
-        player = match.group(1)
-        outcome = match.group(2)
-        if outcome.lower() != "resign":
-            res = "1/2-1/2"
-        else:
-            if player == "P0":
-                res = "0-1"
-            else:
-                res = "1-0"
-
-    # extract result from result line
-    if not res:
-        res = sgf_head[7].split(" ")[-1][:-2]
-        if res == "draw":
-            res = "1/2-1/2"
-        else:
-            try:
-                res = f"{players[res]}"
-
-            # this will sometimes happen due to how boardspace saves results for guest games and games where the player who won was using a localized language version
-            except KeyError:
-                res = "error parsing result"
-
     result = f'[Result "{res}"]'
 
-    gametype = sgf_head[4][3:-2]
+    with open(
+        os.path.join(pgn_path, f"{filename}.pgn"), "w", encoding="utf-8"
+    ) as file_write:
+        file_write.write(
+            f"{gametype}\n{date}\n{event}\n{site}\n{game_round}\n{white}\n{black}\n{result}\n\n"
+        )
+
+    append_moves(sgf_body, filename, expansions, pgn_path)
+
+
+def extract_gametype(line, expansions):
+    gametype = line[3:-2]
     if gametype == "Hive-Ultimate":
-        return
+        raise ValueError("Hive-Ultimate unsuported")
     exp_pieces = ""
 
     if len(gametype) == 4:
@@ -111,15 +110,46 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
             if v:
                 exp_pieces += k
         gametype = f'[GameType "Base+{exp_pieces}"]'
+    return gametype
 
-    with open(
-        os.path.join(pgn_path, f"{filename}.pgn"), "w", encoding="utf-8"
-    ) as file_write:
-        file_write.write(
-            f"{gametype}\n{date}\n{event}\n{site}\n{round}\n{white}\n{black}\n{result}\n\n"
-        )
 
-    append_moves(sgf_body, filename, expansions, pgn_path)
+# try to see if the game finished by agreement
+def resigned_or_drawn(sgf_tail):
+    # regex that will handle result in games where resign or accept draw took place, this helps because it's more reliable than the result line in the sgf in some cases
+    pattern_end = r"^; (P\d)\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
+
+    match = re.match(pattern_end, sgf_tail)
+    res = ""
+    if match:
+        player = match.group(1)
+        outcome = match.group(2)
+        if outcome.lower() != "resign":
+            res = "1/2-1/2"
+        else:
+            if player == "P0":
+                res = "0-1"
+            else:
+                res = "1-0"
+    return res
+
+
+# extract result from result line
+def extract_result(line, players):
+    res = line.split(" ")[-1][:-2]
+    if res == "draw":
+        res = "1/2-1/2"
+    else:
+        try:
+            res = f"{players[res]}"
+
+        # this will sometimes happen due to how boardspace saves results for guest games and games where the player who won was using a localized language version
+        except KeyError:
+            res = "error parsing result"
+    return res
+
+
+def extract_player(line):
+    return line.split(" ")[-1][:-2].strip('"')
 
 
 def append_moves(sgf_body, filename, expansions, pgn_path):
