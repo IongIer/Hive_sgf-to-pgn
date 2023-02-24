@@ -12,6 +12,6 @@ No dependencies only standard library is used.
 Current known limitations:
 
 1. Fails on older games, should work on games played after 2018
-2. Will only work on [games](https://www.boardspace.net/hive/hivegames/) downloaded through the boardspace site, games saved from the app have a slightly different format
+2. Works for [games](https://www.boardspace.net/hive/hivegames/) downloaded through the boardspace site, games saved from the app have a slightly different format but now should work as well. However I haven't thoroughly tested on games downloaded from the app + those have no result in the header, it's better to just get them from the site
 3. Sometimes it won't be able to figure out game result due to how boardspace saves the files
 4. Can't handle Hive Ultimate but pgn viewers don't support it either
