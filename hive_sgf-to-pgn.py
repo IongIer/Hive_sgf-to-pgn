@@ -70,10 +70,10 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
         elif current.startswith("RE["):
             if not res:
                 res = current 
-        elif current.startswith("P0[id"):
+        elif current.startswith("P0[id") or current.startswith("P0[ id"):
             extracted_white = extract_player(current)
             players[extracted_white] = "1-0"
-        elif current.startswith("P1[id"):
+        elif current.startswith("P1[id") or current.startswith("P1[ id"):
             extracted_black = extract_player(current)
             players[extracted_black] = "0-1"
         current = lines.popleft()
@@ -216,9 +216,9 @@ def match_line(line):
         r".*ropb([A-Za-z0-9 \\\/-]+\.?).*\]$",
         r".*([Pp]ass).*$",
         r".*[Mm]ove [BW] ([A-Za-z0-9 \\\/-]+\.?).*\]$",
-        r"^; P[01]\[\d+ ([dD]one).*$",
-        r"^; P\d\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$",
-        r"^; P\d\[\d+ (?:[Dd]ecline)?(?:[Oo]ffer)?([Dd]raw)+.*$",
+        r".*P[01]\[\d+ ([dD]one).*$",
+        r".*P\d\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$",
+        r".*P\d\[\d+ (?:[Dd]ecline)?(?:[Oo]ffer)?([Dd]raw)+.*$",
     ]
     for pattern in patterns:
         match_pattern = re.match(pattern, line)
