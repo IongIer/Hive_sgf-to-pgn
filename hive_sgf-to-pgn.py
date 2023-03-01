@@ -14,7 +14,7 @@ def main():
     sgf_folder = os.path.normpath(vars(parsed_args)["path"])
     pgn_path = os.path.normpath(f"{sgf_folder}//pgn//")
     os.makedirs(pgn_path, exist_ok=True)
-    make_pgn_at = partial(make_pgn, sgf_path=sgf_folder)
+    make_pgn_at = partial(make_pgn, sgf_path=sgf_folder, encoding="iso-8859-1")
     filenames = [
         os.path.basename(filename)[:-4]
         for filename in glob.glob(f"{sgf_folder}//*.sgf")
@@ -39,13 +39,17 @@ def dir_path(path):
         raise argparse.ArgumentTypeError(f"{path} is not a valid directory")
 
 
-def make_pgn(filename, sgf_path):
+def make_pgn(filename, sgf_path, encoding):
     expansions = {"M": 0, "L": 0, "P": 0}
-    with open(
-        os.path.join(sgf_path, f"{filename}.sgf"), "r", encoding="utf-8"
-    ) as file_read:
-        lines = deque(file_read.readlines())
-    write_header(lines, filename, expansions, lines[-7], sgf_path)
+    try:
+        with open(
+            os.path.join(sgf_path, f"{filename}.sgf"), "r", encoding=encoding
+        ) as file_read:
+            lines = deque(file_read.readlines())
+        write_header(lines, filename, expansions, lines[-7], sgf_path)
+    except UnicodeDecodeError:
+        print(f"Couldn't parse {filename}.sgf using {encoding}")
+        return
 
 
 def write_header(lines, filename, expansions, sgf_tail, sgf_path):
@@ -69,14 +73,18 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
 
         elif current.startswith("RE["):
             if not res:
-                res = current 
+                res = current
         elif current.startswith("P0[id") or current.startswith("P0[ id"):
             extracted_white = extract_player(current)
             players[extracted_white] = "1-0"
         elif current.startswith("P1[id") or current.startswith("P1[ id"):
             extracted_black = extract_player(current)
             players[extracted_black] = "0-1"
-        current = lines.popleft()
+        if lines:
+            current = lines.popleft()
+        else:
+            print(f"{filename}.sgf is not a valid hive game")
+            return
 
     res = extract_result(res, players)
     sgf_body = lines
@@ -101,7 +109,7 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
 def extract_gametype(line, expansions):
     gametype = line[3:-2]
     if gametype == "Hive-Ultimate":
-        return gametype 
+        return gametype
     exp_pieces = ""
 
     if len(gametype) == 4:
