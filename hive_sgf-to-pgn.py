@@ -56,7 +56,7 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
 
     pgn_path = os.path.normpath(f"{sgf_path}//pgn//")
     players = dict()
-    pattern_start = r";\s*P0\[0 Start P0\]"
+    pattern_start = r";\s*P[01]\[0 Start P[01]\]"
     extracted_date = ".".join(filename.split("-")[-4:-1])
     gametype = ""
     extracted_white = ""
