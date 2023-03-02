@@ -14,7 +14,7 @@ def main():
     sgf_folder = os.path.normpath(vars(parsed_args)["path"])
     pgn_path = os.path.normpath(f"{sgf_folder}//pgn//")
     os.makedirs(pgn_path, exist_ok=True)
-    make_pgn_at = partial(make_pgn, sgf_path=sgf_folder)
+    make_pgn_at = partial(make_pgn, sgf_path=sgf_folder, encoding="iso-8859-1")
     filenames = [
         os.path.basename(filename)[:-4]
         for filename in glob.glob(f"{sgf_folder}//*.sgf")
@@ -39,13 +39,17 @@ def dir_path(path):
         raise argparse.ArgumentTypeError(f"{path} is not a valid directory")
 
 
-def make_pgn(filename, sgf_path):
+def make_pgn(filename, sgf_path, encoding):
     expansions = {"M": 0, "L": 0, "P": 0}
-    with open(
-        os.path.join(sgf_path, f"{filename}.sgf"), "r", encoding="utf-8"
-    ) as file_read:
-        lines = deque(file_read.readlines())
-    write_header(lines, filename, expansions, lines[-7], sgf_path)
+    try:
+        with open(
+            os.path.join(sgf_path, f"{filename}.sgf"), "r", encoding=encoding
+        ) as file_read:
+            lines = deque(file_read.readlines())
+        write_header(lines, filename, expansions, lines[-7], sgf_path)
+    except UnicodeDecodeError:
+        print(f"Couldn't parse {filename}.sgf using {encoding}")
+        return
 
 
 def write_header(lines, filename, expansions, sgf_tail, sgf_path):
@@ -69,14 +73,18 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
 
         elif current.startswith("RE["):
             if not res:
-                res = current 
+                res = current
         elif current.startswith("P0[id") or current.startswith("P0[ id"):
             extracted_white = extract_player(current)
             players[extracted_white] = "1-0"
         elif current.startswith("P1[id") or current.startswith("P1[ id"):
             extracted_black = extract_player(current)
             players[extracted_black] = "0-1"
-        current = lines.popleft()
+        if lines:
+            current = lines.popleft()
+        else:
+            print(f"{filename}.sgf is not a valid hive game")
+            return
 
     res = extract_result(res, players)
     sgf_body = lines
@@ -101,7 +109,7 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
 def extract_gametype(line, expansions):
     gametype = line[3:-2]
     if gametype == "Hive-Ultimate":
-        return gametype 
+        return gametype
     exp_pieces = ""
 
     if len(gametype) == 4:
@@ -122,7 +130,7 @@ def extract_gametype(line, expansions):
 # try to see if the game finished by agreement
 def resigned_or_drawn(sgf_tail):
     # regex that will handle result in games where resign or accept draw took place, this helps because it's more reliable than the result line in the sgf in some cases
-    pattern_end = r"^; (P\d)\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
+    pattern_end = r".*(P\d)\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$"
 
     match_end = re.match(pattern_end, sgf_tail)
     res = ""
@@ -173,7 +181,7 @@ def append_moves(sgf_body, filename, expansions, pgn_path):
         os.path.join(pgn_path, f"{filename}.pgn"), "a", encoding="utf-8"
     ) as file_write:
         for unprocessed_line in sgf_body:
-            line = match_line(unprocessed_line)
+            prefix, line = match_line(unprocessed_line)
             if not line:
                 continue
             # stop writing in case a resign or accept draw is encountered
@@ -203,7 +211,7 @@ def append_moves(sgf_body, filename, expansions, pgn_path):
             # update the current move to be written
             elif low != "pass":
                 placed_bug, coordinates, destination = extract_piece_and_destination(
-                    i, line, expansions, lookup_table, reverse_lookup
+                    i, prefix, line, expansions, lookup_table, reverse_lookup
                 )
             # in case a player can't move
             else:
@@ -213,18 +221,18 @@ def append_moves(sgf_body, filename, expansions, pgn_path):
 
 def match_line(line):
     patterns = [
-        r".*ropb([A-Za-z0-9 \\\/-]+\.?).*\]$",
-        r".*([Pp]ass).*$",
-        r".*[Mm]ove [BW] ([A-Za-z0-9 \\\/-]+\.?).*\]$",
-        r".*P[01]\[\d+ ([dD]one).*$",
-        r".*P\d\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$",
-        r".*P\d\[\d+ (?:[Dd]ecline)?(?:[Oo]ffer)?([Dd]raw)+.*$",
+        r".*(P[01]).*ropb([A-Za-z0-9 \\\/-]+\.?).*\]$",
+        r".*(P[01]).*([Pp]ass).*$",
+        r".*(P[01])*[Mm]ove [BW] ([A-Za-z0-9 \\\/-]+\.?).*\]$",
+        r".*(P[01])*P[01]\[\d+ ([dD]one).*$",
+        r".*(P[01])*P\d\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$",
+        r".*(P[01])*P\d\[\d+ (?:[Dd]ecline)?(?:[Oo]ffer)?([Dd]raw)+.*$",
     ]
     for pattern in patterns:
         match_pattern = re.match(pattern, line)
         if match_pattern:
-            return match_pattern.group(1)
-    return ""
+            return [match_pattern.group(1), match_pattern.group(2)]
+    return ["", ""]
 
 
 def append_current_move(
@@ -244,13 +252,23 @@ def append_current_move(
     return i, placed_bug, destination, coordinates
 
 
-def extract_piece_and_destination(i, line, expansions, lookup_table, reverse_lookup):
+def extract_piece_and_destination(
+    i, prefix, line, expansions, lookup_table, reverse_lookup
+):
     turn = line.split()
+    prefixes = {"w", "b"}
     placed_bug = turn[0]
+    if prefix == "P0":
+        prefix = "w"
+    else:
+        prefix = "b"
     # strip extra number for l/m/p
     if len(placed_bug) != 1 and placed_bug[1] in expansions:
         placed_bug = placed_bug[:-1]
     # no need to escape \ in pgn
+    if placed_bug[0] not in prefixes:
+        placed_bug = prefix + placed_bug
+
     destination = re.sub(r"\\\\", r"\\", turn[-1])
     coordinates = "-".join(turn[1:-1])
     # . on bs is used for the first move where it won't reference another piece and for moves on top of the hive
