@@ -262,13 +262,12 @@ def extract_piece_and_destination(
         prefix = "w"
     else:
         prefix = "b"
+    if placed_bug[0] not in prefixes:
+        placed_bug = prefix + placed_bug
     # strip extra number for l/m/p
     if len(placed_bug) != 1 and placed_bug[1] in expansions:
         placed_bug = placed_bug[:-1]
     # no need to escape \ in pgn
-    if placed_bug[0] not in prefixes:
-        placed_bug = prefix + placed_bug
-
     destination = re.sub(r"\\\\", r"\\", turn[-1])
     coordinates = "-".join(turn[1:-1])
     # . on bs is used for the first move where it won't reference another piece and for moves on top of the hive
