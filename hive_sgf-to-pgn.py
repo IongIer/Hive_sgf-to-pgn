@@ -241,7 +241,11 @@ def append_current_move(
     if not placed_bug:
         placed_bug = "pass"
         destination = ""
-    file_write.write(f"{i}. {placed_bug} {destination}\n")
+    if not destination:
+        file_write.write(f"{i}. {placed_bug}\n")
+
+    else:
+        file_write.write(f"{i}. {placed_bug} {destination}\n")
     if placed_bug in reverse_lookup:
         lookup_table[reverse_lookup[placed_bug]].pop()
     if placed_bug != "pass":
