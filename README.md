@@ -13,5 +13,4 @@ Current known limitations:
 
 1. Sometimes it won't be able to figure out game result due to how boardspace saves the files
 2. Can't handle Hive Ultimate but pgn viewers don't support it either
-3. Some bot games from 2015 don't work yet
-4. Games before march 2013 that contain a pillbug will not be valid because pillbug used different rules
+3. Games before march 2013 that contain a pillbug will not be valid because pillbug used different rules
