@@ -108,7 +108,7 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
 
 def extract_gametype(line, expansions):
     gametype = line[3:-2]
-    if gametype == "Hive-Ultimate":
+    if gametype == "Hive-Ultimate" or gametype == "hive-ultimate":
         return gametype
     exp_pieces = ""
 
@@ -176,7 +176,6 @@ def append_moves(sgf_body, filename, expansions, pgn_path):
     destination = ""
     coordinates = ""
     draw = False
-
     with open(
         os.path.join(pgn_path, f"{filename}.pgn"), "a", encoding="utf-8"
     ) as file_write:
@@ -188,12 +187,33 @@ def append_moves(sgf_body, filename, expansions, pgn_path):
             if re.match(end, line):
                 return
             line = line.strip()
+
+            # this will trigger on botgames played around 2015
+
+            if line.startswith("movedone "):
+                # this is very hacky
+                line = line.lstrip("BWmovedn ")
+                placed_bug, coordinates, destination = extract_piece_and_destination(
+                    i, prefix, line, expansions, lookup_table, reverse_lookup
+                )
+                i, placed_bug, destination, coordinates = append_current_move(
+                    i,
+                    placed_bug,
+                    destination,
+                    coordinates,
+                    file_write,
+                    lookup_table,
+                    reverse_lookup,
+                )
+                continue
+
             low = line.lower()
             # for draw offers and refusals, the next done needs to be skipped
             if low == "draw":
                 draw = True
                 continue
             # write the next line to a file when a done is encountered but only if it wasn't part of a draw offer or refusal
+
             if low == "done":
                 if draw:
                     draw = False
@@ -227,6 +247,7 @@ def match_line(line):
         r".*(P[01])*P[01]\[\d+ ([dD]one).*$",
         r".*(P[01])*P\d\[\d+ ((?:[rR]esign)|(?:[Aa]ccept[Dd]raw)).*$",
         r".*(P[01])*P\d\[\d+ (?:[Dd]ecline)?(?:[Oo]ffer)?([Dd]raw)+.*$",
+        r".*(P[01])+.*([Mm]ovedone [BW] [A-Za-z0-9 \\\/-]+\.?).*\]$",
     ]
     for pattern in patterns:
         match_pattern = re.match(pattern, line)
