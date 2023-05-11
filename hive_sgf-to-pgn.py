@@ -67,6 +67,9 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
     while not re.match(pattern_start, current):
         if current.startswith("SU["):
             gametype = extract_gametype(current, expansions)
+            if not gametype:
+                print("Failed to parse gametype")
+                return
             if gametype.lower() == "hive-ultimate":
                 print("Hive-Ultimate unsupported, skipping file")
                 return
@@ -107,11 +110,16 @@ def write_header(lines, filename, expansions, sgf_tail, sgf_path):
 
 
 def extract_gametype(line, expansions):
-    gametype = line[3:-2]
+    pattern_gametype = r"SU\[([Hh]ive-?p?P?l?L?m?M?(:?[Uu]ltimate)?)"
+    match_gametype = re.match(pattern_gametype, line)
+    if match_gametype:
+        gametype = match_gametype.group(1)
+    else:
+        return ""
     if gametype == "Hive-Ultimate" or gametype == "hive-ultimate":
         return gametype
     exp_pieces = ""
-
+    
     if len(gametype) == 4:
         gametype = '[GameType "Base"]'
     else:
